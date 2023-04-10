@@ -2,12 +2,19 @@ package com.skypro.simpleaviasales.repository.specification;
 
 import com.skypro.simpleaviasales.model.Airline;
 import com.skypro.simpleaviasales.model.Flight;
-import com.sun.xml.bind.v2.TODO;
+import liquibase.repackaged.org.apache.commons.lang3.tuple.Pair;
 import org.springframework.data.jpa.domain.Specification;
 
 import javax.persistence.criteria.Join;
+import javax.persistence.criteria.Predicate;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+
+import static org.springframework.util.StringUtils.hasText;
 
 public class FlightSpecifications {
+
     public static Specification<Flight> byAirline(String airlineName){
         return (root, query, criteriaBuilder) -> {
             if (airlineName == null || airlineName.isBlank()) {
@@ -18,16 +25,62 @@ public class FlightSpecifications {
         };
     }
 
-
-//TODO:ДОДЕЛАТЬ
     public static Specification<Flight> byAirportName(String airportName){
         return (root, query, criteriaBuilder) -> {
-            Join<Flight, Airline> airline = root.join("airline");
-            return criteriaBuilder.equal(airline.get("name"), airportName);
+            if (!hasText(airportName)) {
+                return criteriaBuilder.conjunction();
+            }
+            Join<Flight, Airline> departureAirport = root.join("departureAirport");
+            Join<Flight, Airline> arrivalAirport = root.join("arrivalAirport");
+            Predicate predicateDeparture = criteriaBuilder.equal(departureAirport.get("name"), airportName);
+            Predicate predicateArrival = criteriaBuilder.equal(arrivalAirport.get("name"), airportName);
+
+            return criteriaBuilder.or(predicateDeparture, predicateArrival);
         };
     }
 
+    public static Specification<Flight> byCityName(String cityName){
+        return (root, query, criteriaBuilder) -> {
+            if (!hasText(cityName)) {
+                return criteriaBuilder.conjunction();
+            }
+            Join<Flight, Airline> departureAirport = root.join("departureAirport");
+            Join<Flight, Airline> arrivalAirport = root.join("arrivalAirport");
+            Predicate predicateDeparture = criteriaBuilder.equal(departureAirport.get("city"), cityName);
+            Predicate predicateArrival = criteriaBuilder.equal(arrivalAirport.get("city"), cityName);
 
+            return criteriaBuilder.or(predicateDeparture, predicateArrival);
+        };
+    }
+
+    private static Pair<Instant, Instant> toDateRange(LocalDate localDate){
+        Instant startOfDay = localDate.atStartOfDay(ZoneId.of("UTC")).toInstant();
+        Instant endOfDay = localDate.atTime(23,59,59).atZone(
+                ZoneId.of("UTC")).toInstant();
+        return Pair.of(startOfDay, endOfDay);
+    }
+
+    public static Specification<Flight> byDepartureData(LocalDate departureDate){
+        return (root, query, criteriaBuilder) -> {
+            if (departureDate == null) {
+                return criteriaBuilder.conjunction();
+            }
+            Pair<Instant, Instant> dataRange = toDateRange(departureDate);
+            return criteriaBuilder.between(root.get("departureDate"),
+                    dataRange.getRight(), dataRange.getLeft());
+        };
+    }
+
+    public static Specification<Flight> byArrivalDate(LocalDate arrivalDate){
+        return (root, query, criteriaBuilder) -> {
+            if (arrivalDate == null) {
+                return criteriaBuilder.conjunction();
+            }
+            Pair<Instant, Instant> dataRange = toDateRange(arrivalDate);
+            return criteriaBuilder.between(root.get("departureDate"),
+                    dataRange.getRight(), dataRange.getLeft());
+        };
+    }
 
 
 }
